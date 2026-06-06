@@ -99,7 +99,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [screen, setScreen] = useState("splash");
+  const [screen, setScreen] = useState("splash"); // splash|auth|register|forgotPassword|verifyEmail|setup|app
   const [tab, setTab] = useState("discover");
   const [subScreen, setSubScreen] = useState(null);
   const [viewingProfile, setViewingProfile] = useState(null);
@@ -184,16 +184,55 @@ export default function App() {
 
   const showNotif = (msg) => { setNotification(msg); setTimeout(() => setNotification(null), 3500); };
 
-  const handleAuth = async () => {
+  const handleAuthDirect = async (mode) => {
     setAuthError("");
+    if (!form.email || !form.password) { setAuthError("Please enter email and password"); return; }
     try {
-      if (authMode==="register") await createUserWithEmailAndPassword(auth, form.email, form.password);
-      else await signInWithEmailAndPassword(auth, form.email, form.password);
+      await signInWithEmailAndPassword(auth, form.email, form.password);
     } catch(e) {
-      const msgs = { "auth/user-not-found":"Email not found", "auth/wrong-password":"Wrong password", "auth/email-already-in-use":"Email already registered", "auth/weak-password":"Password must be 6+ characters", "auth/invalid-email":"Invalid email", "auth/invalid-credential":"Incorrect email or password" };
+      const msgs = { "auth/user-not-found":"Email not found", "auth/wrong-password":"Wrong password", "auth/invalid-email":"Invalid email", "auth/invalid-credential":"Incorrect email or password" };
       setAuthError(msgs[e.code] || "Something went wrong");
     }
   };
+
+  const handleRegister = async () => {
+    setAuthError("");
+    if (!form.name) { setAuthError("Username is required"); return; }
+    if (!form.email) { setAuthError("Email is required"); return; }
+    if (form.email !== form.emailConfirm) { setAuthError("Emails do not match"); return; }
+    if (!form.password || form.password.length < 6) { setAuthError("Password must be at least 6 characters"); return; }
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      await cred.user.sendEmailVerification();
+      setScreen("verifyEmail");
+    } catch(e) {
+      const msgs = { "auth/email-already-in-use":"Email already registered", "auth/weak-password":"Password must be 6+ characters", "auth/invalid-email":"Invalid email format" };
+      setAuthError(msgs[e.code] || "Something went wrong");
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setAuthError("");
+    if (!form.email) { setAuthError("Please enter your email address"); return; }
+    try {
+      const { sendPasswordResetEmail } = await import("firebase/auth");
+      await sendPasswordResetEmail(auth, form.email);
+      showNotif("Reset link sent! Check your email 📧");
+    } catch(e) {
+      setAuthError("Email not found. Please check and try again.");
+    }
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      if (auth.currentUser) await auth.currentUser.sendEmailVerification();
+      showNotif("Verification email resent! 📧");
+    } catch(e) {
+      showNotif("Please wait before requesting another email");
+    }
+  };
+
+  const handleAuth = async () => { handleAuthDirect("login"); };
 
   const handleGoogle = async () => {
     try { await signInWithPopup(auth, googleProvider); }
@@ -319,33 +358,85 @@ export default function App() {
     <div style={{...s.root, justifyContent:"space-between", padding:"64px 28px 48px"}}>
       <style>{css}</style>
       <div>
-        <div style={s.brandHero} className="fade-up"><span style={{color:C.ink}}>No</span><span style={{color:"#E8735A",fontStyle:"italic"}}>Single</span></div>
+        <div style={s.brandHero} className="fade-up">
+          <span style={{color:C.ink}}>No</span><span style={{color:"#E8735A", fontStyle:"italic"}}>Single</span>
+        </div>
         <div style={{fontSize:15, color:C.ink2, marginTop:10, lineHeight:1.7}} className="fade-up">
           Women choose first.<br/>Real connections, by design.
         </div>
       </div>
       <div className="fade-up">
-        <div style={{display:"flex", background:C.border, borderRadius:14, padding:3, gap:3, marginBottom:0}}>
-          {["login","register"].map(m=>(
-            <button key={m} style={{flex:1,padding:"12px",border:"none",borderRadius:11,cursor:"pointer",fontSize:14,fontWeight:500,background:authMode===m?C.surface:"transparent",color:authMode===m?C.ink:C.ink3,transition:"all 0.2s",fontFamily:"inherit"}}
-              onClick={()=>{setAuthMode(m);setAuthError("");}}>
-              {m==="login"?"Sign In":"Create Account"}
-            </button>
-          ))}
+        <input type="email" placeholder="Email address" style={s.inp} value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
+        <input type="password" placeholder="Password" style={{...s.inp, marginBottom:16}} value={form.password} onChange={e=>setForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/>
+        {authError && <div style={{fontSize:13,color:C.red,marginBottom:12,textAlign:"center"}}>{authError}</div>}
+        <button style={s.btnPrimary} onClick={()=>handleAuthDirect("login")}>Sign In</button>
+        <button style={{background:"none", border:"none", fontSize:13, color:C.ink3, cursor:"pointer", textAlign:"center", width:"100%", marginBottom:4, textDecoration:"underline"}} onClick={()=>setScreen("forgotPassword")}>Forgot password?</button>
+        <button style={{...s.btnPrimary, background:"none", border:`1.5px solid ${C.ink}`, color:C.ink, boxShadow:"none"}} onClick={()=>setScreen("register")}>Create Account</button>
+        <div style={{display:"flex", alignItems:"center", gap:12, margin:"8px 0"}}>
+          <div style={{flex:1, height:1, background:C.border}}/><span style={{fontSize:12, color:C.ink3}}>or</span><div style={{flex:1, height:1, background:C.border}}/>
         </div>
-        <div style={{background:C.surface,borderRadius:"0 0 20px 20px",padding:"20px 20px 24px",boxShadow:`0 8px 32px rgba(22,12,0,0.07)`}}>
-          <input type="email" placeholder="Email address" style={s.inp} value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
-          <input type="password" placeholder="Password" style={{...s.inp,marginBottom:0}} value={form.password} onChange={e=>setForm(p=>({...p,password:e.target.value}))} onKeyDown={e=>e.key==="Enter"&&handleAuth()}/>
-          {authError && <div style={{fontSize:13,color:C.red,marginTop:10,textAlign:"center"}}>{authError}</div>}
-          <button style={{...s.btnPrimary,marginTop:16}} onClick={handleAuth}>{authMode==="login"?"Sign In":"Create Account"}</button>
-          <div style={{display:"flex",alignItems:"center",gap:12,margin:"8px 0"}}>
-            <div style={{flex:1,height:1,background:C.border}}/><span style={{fontSize:12,color:C.ink3}}>or</span><div style={{flex:1,height:1,background:C.border}}/>
-          </div>
-          <button style={s.btnGoogle} onClick={handleGoogle}>
-            <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
-            Continue with Google
-          </button>
+        <button style={s.btnGoogle} onClick={handleGoogle}>
+          <svg width="18" height="18" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+          Continue with Google
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── REGISTER ──
+  if (screen==="register") return (
+    <div style={{...s.root, padding:"48px 28px 32px"}}>
+      <style>{css}</style>
+      <button style={{background:"none", border:"none", fontSize:22, color:C.ink, cursor:"pointer", marginBottom:24}} onClick={()=>setScreen("auth")}>←</button>
+      <div style={s.setupH} className="fade-up">Create Account</div>
+      <div style={s.setupSub}>Join NoSingle. It only takes a minute.</div>
+      <div style={{display:"flex", flexDirection:"column", gap:12, marginTop:28}}>
+        <input placeholder="Username *" style={s.inp} value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
+        <input type="email" placeholder="Email address *" style={s.inp} value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
+        <input type="email" placeholder="Confirm email address *" style={s.inp} value={form.emailConfirm||""} onChange={e=>setForm(p=>({...p,emailConfirm:e.target.value}))}/>
+        <input type="password" placeholder="Password (min. 6 characters) *" style={{...s.inp, marginBottom:0}} value={form.password} onChange={e=>setForm(p=>({...p,password:e.target.value}))}/>
+      </div>
+      {authError && <div style={{fontSize:13, color:C.red, marginTop:12, textAlign:"center"}}>{authError}</div>}
+      <div style={{background:"#F0F7FF", borderRadius:14, padding:"12px 16px", marginTop:16, fontSize:12, color:"#2A5A8A", lineHeight:1.6}}>
+        📧 After signing up, we'll send a verification email. Please confirm your email to activate your account.
+      </div>
+      <button style={{...s.btnPrimary, marginTop:20}} onClick={handleRegister}>Create Account →</button>
+      <button style={s.btnGhost} onClick={()=>setScreen("auth")}>Already have an account? Sign In</button>
+    </div>
+  );
+
+  // ── FORGOT PASSWORD ──
+  if (screen==="forgotPassword") return (
+    <div style={{...s.root, padding:"48px 28px 32px"}}>
+      <style>{css}</style>
+      <button style={{background:"none", border:"none", fontSize:22, color:C.ink, cursor:"pointer", marginBottom:24}} onClick={()=>setScreen("auth")}>←</button>
+      <div style={s.setupH}>Forgot Password?</div>
+      <div style={s.setupSub}>Enter your email and we'll send you a reset link.</div>
+      <div style={{marginTop:28}}>
+        <input type="email" placeholder="Email address" style={s.inp} value={form.email} onChange={e=>setForm(p=>({...p,email:e.target.value}))}/>
+      </div>
+      {authError && <div style={{fontSize:13, color:C.red, marginTop:8, textAlign:"center"}}>{authError}</div>}
+      {notification && <div style={{fontSize:13, color:C.success, marginTop:8, textAlign:"center", background:"#F0FFF4", padding:"10px 14px", borderRadius:12}}>{notification}</div>}
+      <button style={{...s.btnPrimary, marginTop:16}} onClick={handleForgotPassword}>Send Reset Link</button>
+      <button style={s.btnGhost} onClick={()=>setScreen("auth")}>Back to Sign In</button>
+    </div>
+  );
+
+  // ── EMAIL VERIFICATION ──
+  if (screen==="verifyEmail") return (
+    <div style={{...s.root, alignItems:"center", justifyContent:"center", padding:"48px 28px"}}>
+      <style>{css}</style>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:64, marginBottom:16}}>📧</div>
+        <div style={s.setupH}>Check your email</div>
+        <div style={{...s.setupSub, marginBottom:24}}>We sent a verification link to<br/><strong>{form.email}</strong></div>
+        <div style={{background:"#F0F7FF", borderRadius:14, padding:"14px 16px", marginBottom:24, fontSize:13, color:"#2A5A8A", lineHeight:1.6, textAlign:"left"}}>
+          1. Open your email inbox<br/>
+          2. Click the verification link<br/>
+          3. Come back and sign in
         </div>
+        <button style={s.btnPrimary} onClick={()=>setScreen("auth")}>I've verified — Sign In</button>
+        <button style={{...s.btnGhost, fontSize:13}} onClick={handleResendVerification}>Resend verification email</button>
       </div>
     </div>
   );
