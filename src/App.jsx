@@ -956,4 +956,146 @@ export default function App() {
               <img src={userProfile?.photo||`https://ui-avatars.com/api/?name=${userProfile?.name||"U"}&background=C4622D&color=fff&size=400`} style={{width:"100%",height:"100%",objectFit:"cover"}} alt="me"/>
               <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,rgba(22,12,0,0.8) 0%,transparent 50%)"}}/>
               <div style={{position:"absolute",bottom:0,left:0,right:0,padding:"20px 24px"}}>
-                <div style={{fontSize:26,fontWeight:700,color:"white"}}>{userProfile?.name}, {userProfile?.ag
+                <div style={{fontSize:26,fontWeight:700,color:"white"}}>{userProfile?.name}, {userProfile?.age}</div>
+                <div style={{fontSize:13,color:"rgba(255,255,255,0.65)",marginTop:4}}>{userProfile?.city}</div>
+                {isWoman && <div style={{fontSize:12,color:C.accent,marginTop:4,background:"rgba(196,98,45,0.2)",borderRadius:8,padding:"2px 8px",display:"inline-block"}}>👑 Women Choose</div>}
+              </div>
+            </div>
+
+            <div style={{padding:"20px 24px"}}>
+              {/* Women timer setting */}
+              {isWoman && (
+                <div style={{background:C.accentLight,borderRadius:16,padding:16,marginBottom:20,border:`1px solid ${C.accent}20`}}>
+                  <div style={{fontSize:14,fontWeight:600,color:C.accent,marginBottom:8}}>⏰ Your default timer</div>
+                  <div style={{fontSize:12,color:C.ink2,marginBottom:10}}>How long do men have to wait for your response?</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {TIMER_OPTIONS.map(t=>(
+                      <button key={t.hours} style={{padding:"6px 12px",borderRadius:10,border:`1px solid ${myTimer===t.hours?C.accent:C.border}`,background:myTimer===t.hours?C.accent:"white",fontSize:12,color:myTimer===t.hours?"white":C.ink2,cursor:"pointer",fontFamily:"inherit"}}
+                        onClick={()=>{setMyTimer(t.hours);showNotif(`Default timer: ${t.label}`);}}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stats */}
+              <div style={{display:"flex",borderRadius:16,overflow:"hidden",border:`1px solid ${C.border}`,background:C.surface,marginBottom:20}}>
+                {[[isWoman?pendingApprovals.length:Object.keys(liked).length,isWoman?"Waiting":"Likes Sent"],[coins,"Coins"],[plan==="free"?"Free":plan,"Plan"]].map(([n,l],i)=>(
+                  <div key={l} style={{flex:1,padding:"16px 8px",textAlign:"center",borderRight:i<2?`1px solid ${C.border}`:"none"}}>
+                    <div style={{fontSize:18,fontWeight:700,color:C.ink}}>{n}</div>
+                    <div style={{fontSize:10,color:C.ink3,marginTop:2,textTransform:"uppercase",letterSpacing:0.5}}>{l}</div>
+                  </div>
+                ))}
+              </div>
+
+              {[
+                ["Membership",plan==="free"?"Upgrade your experience":"Active: "+plan,()=>setSubScreen("premium"),plan==="free"],
+                ["Get Coins",`Balance: ✦ ${coins}`,()=>setSubScreen("coins"),false],
+                ["Gift Shop","Send something meaningful",()=>setSubScreen("gift"),false],
+                ["Edit Profile","Update your info",()=>showNotif("Coming soon!"),false],
+                ["Privacy & Safety","Manage your account",()=>showNotif("Coming soon!"),false],
+              ].map(([label,sub,action,highlight])=>(
+                <div key={label} style={{display:"flex",alignItems:"center",padding:"16px 0",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}} onClick={action}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:15,fontWeight:600,color:highlight?C.accent:C.ink}}>{label}</div>
+                    <div style={{fontSize:12,color:C.ink3,marginTop:2}}>{sub}</div>
+                  </div>
+                  <span style={{color:C.border,fontSize:18}}>›</span>
+                </div>
+              ))}
+
+              <button style={{...s.btnGhost,marginTop:24,color:C.red,borderColor:C.red}} onClick={()=>signOut(auth)}>
+                Sign Out
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+
+      {/* Match popup */}
+      {showMatch && matchedProfile && (
+        <div style={{position:"fixed",inset:0,zIndex:50,display:"flex",alignItems:"flex-end",justifyContent:"center",background:"rgba(22,12,0,0.75)",backdropFilter:"blur(20px)"}} className="fade-up">
+          <div style={{background:C.surface,borderRadius:"24px 24px 0 0",width:"100%",maxWidth:430,padding:"36px 28px 48px",textAlign:"center"}}>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:20}}>
+              <img src={userProfile?.photo||""} style={{width:70,height:70,borderRadius:35,objectFit:"cover",border:`3px solid ${C.surface}`,zIndex:2}} alt="me"/>
+              <img src={matchedProfile.photos[0]} style={{width:70,height:70,borderRadius:35,objectFit:"cover",border:`3px solid ${C.surface}`,marginLeft:-16}} alt="match"/>
+            </div>
+            <div style={{fontSize:11,letterSpacing:2,textTransform:"uppercase",color:C.ink3,marginBottom:8}}>
+              {isWoman?"You approved — it's a match!":"She approved — it's a match!"}
+            </div>
+            <div style={{fontSize:24,fontWeight:700,color:C.ink,marginBottom:8}}>You and {matchedProfile.name}</div>
+            <div style={{fontSize:14,color:C.ink2,marginBottom:28,lineHeight:1.6}}>
+              {isWoman?"You're in control. Say hello whenever you're ready.":"She approved your request. Don't keep her waiting."}
+            </div>
+            <button style={s.btnPrimary} onClick={()=>{setShowMatch(false);setApprovedMatches(p=>[...p,matchedProfile]);setActiveChat(matchedProfile);setMessages([]);setSubScreen("chat");}}>
+              {isWoman?"Say Hello 👋":"Send a Message"}
+            </button>
+            <button style={s.btnGhost} onClick={()=>setShowMatch(false)}>Keep Exploring</button>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom nav */}
+      <nav style={s.nav}>
+        {[
+          {id:"discover",icon:"⊕",label:"Discover"},
+          {id:"matches",icon:isWoman&&pendingApprovals.length>0?"👑":"♡",label:"Connections",badge:isWoman?pendingApprovals.length:0},
+          {id:"profile",icon:"◯",label:"Profile"},
+        ].map(({id,icon,label,badge})=>{
+          const active=tab===id;
+          return (
+            <button key={id} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:active?C.ink:C.ink3,padding:"8px 0",position:"relative",transition:"color 0.2s",fontFamily:"inherit"}} onClick={()=>setTab(id)}>
+              <span style={{fontSize:22,lineHeight:1}}>{icon}</span>
+              <span style={{fontSize:9,fontWeight:active?700:400,letterSpacing:1,textTransform:"uppercase"}}>{label}</span>
+              {active && <div style={{width:4,height:4,borderRadius:2,background:C.ink,marginTop:1}}/>}
+              {badge>0 && <div style={{position:"absolute",top:4,right:"50%",transform:"translateX(200%)",background:C.accent,color:"white",fontSize:9,fontWeight:700,width:16,height:16,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center"}}>{badge}</div>}
+            </button>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
+
+const s = {
+  root:{ background:C.bg, minHeight:"100vh", maxWidth:430, margin:"0 auto", display:"flex", flexDirection:"column", fontFamily:"'DM Sans', -apple-system, sans-serif", color:C.ink, position:"relative" },
+  brandHero:{ fontSize:44, fontWeight:700, color:C.ink, letterSpacing:-1, fontFamily:"'Cormorant Garamond', Georgia, serif" },
+  brand:{ fontSize:24, fontWeight:700, color:C.ink, letterSpacing:-0.5, fontFamily:"'Cormorant Garamond', Georgia, serif" },
+  hdr:{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 20px 12px", background:"rgba(250,250,248,0.95)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:10 },
+  main:{ flex:1, overflowY:"auto", paddingBottom:72 },
+  inp:{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", fontSize:14, color:C.ink, outline:"none", boxSizing:"border-box", fontFamily:"inherit", appearance:"none" },
+  btnPrimary:{ width:"100%", background:C.ink, border:"none", borderRadius:14, padding:"15px", color:"white", fontSize:15, fontWeight:600, cursor:"pointer", marginBottom:10, fontFamily:"inherit" },
+  btnGhost:{ width:"100%", background:"none", border:`1px solid ${C.border}`, borderRadius:14, padding:"14px", color:C.ink2, fontSize:14, cursor:"pointer", marginBottom:10, fontFamily:"inherit" },
+  btnGoogle:{ width:"100%", background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"14px", color:C.ink, fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:10, fontFamily:"inherit" },
+  setupH:{ fontSize:28, fontWeight:700, color:C.ink, lineHeight:1.3 },
+  setupSub:{ fontSize:14, color:C.ink2, marginTop:8, lineHeight:1.6 },
+  promptBlock:{ background:C.surface, borderRadius:16, padding:"18px 18px 14px", border:`1px solid ${C.border}` },
+  likePhotoBtn:{ position:"absolute", bottom:16, right:16, background:"rgba(250,250,248,0.92)", border:"none", borderRadius:22, width:44, height:44, fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", backdropFilter:"blur(8px)" },
+  likePromptBtn:{ background:"none", border:"none", fontSize:13, color:C.ink3, cursor:"pointer", marginTop:12, padding:0, fontFamily:"inherit", display:"flex", alignItems:"center", gap:4 },
+  profileActions:{ position:"fixed", bottom:72, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:430, display:"flex", gap:12, padding:"12px 20px", background:"rgba(250,250,248,0.95)", backdropFilter:"blur(12px)", borderTop:`1px solid ${C.border}`, zIndex:10 },
+  passBtn:{ flex:1, background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"13px", fontSize:14, fontWeight:500, color:C.ink2, cursor:"pointer", fontFamily:"inherit" },
+  giftBtnSm:{ width:48, height:48, borderRadius:24, background:C.surface, border:`1px solid ${C.border}`, fontSize:20, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 },
+  likeBtn:{ flex:1, background:C.ink, border:"none", borderRadius:14, padding:"13px", fontSize:13, fontWeight:600, color:"white", cursor:"pointer", fontFamily:"inherit" },
+  pageHdr:{ display:"flex", alignItems:"center", gap:12, padding:"14px 20px", background:"rgba(250,250,248,0.95)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:10 },
+  pageHdrTitle:{ flex:1, fontSize:17, fontWeight:600, color:C.ink, textAlign:"center" },
+  backBtn:{ background:"none", border:"none", fontSize:22, color:C.ink, cursor:"pointer", padding:0, width:32, fontFamily:"inherit" },
+  msgInp:{ flex:1, background:C.bg, border:`1px solid ${C.border}`, borderRadius:22, padding:"11px 18px", fontSize:14, outline:"none", color:C.ink, fontFamily:"inherit" },
+  sendBtn:{ width:42, height:42, borderRadius:21, background:C.ink, border:"none", color:"white", fontSize:16, cursor:"pointer", flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center" },
+  bubbleMe:{ background:C.ink, color:"white", padding:"11px 16px", borderRadius:"18px 18px 4px 18px", fontSize:14, lineHeight:1.5 },
+  bubbleThem:{ background:C.surface, color:C.ink, padding:"11px 16px", borderRadius:"18px 18px 18px 4px", fontSize:14, lineHeight:1.5, border:`1px solid ${C.border}` },
+  notif:{ position:"fixed", top:72, left:"50%", transform:"translateX(-50%)", background:C.ink, color:"white", fontSize:13, fontWeight:500, padding:"10px 20px", borderRadius:20, zIndex:100, whiteSpace:"nowrap", boxShadow:"0 4px 20px rgba(22,12,0,0.2)" },
+  nav:{ display:"flex", background:"rgba(250,250,248,0.97)", backdropFilter:"blur(12px)", borderTop:`1px solid ${C.border}`, padding:"6px 0 12px", position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:430, zIndex:10 },
+};
+
+const css = `
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  ::-webkit-scrollbar { width: 0; height: 0; }
+  button { font-family: inherit; }
+  button:active { opacity: 0.85; }
+  select, input { -webkit-appearance: none; appearance: none; }
+  .fade-up { animation: fadeUp 0.5s cubic-bezier(0.2,0.8,0.2,1) both; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes dot { 0%,80%,100% { opacity:0.3; transform:scale(0.8); } 40% { opacity:1; transform:scale(1); } }
+`;
