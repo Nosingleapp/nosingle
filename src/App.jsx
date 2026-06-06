@@ -1060,8 +1060,8 @@ export default function App() {
 
 const s = {
   root:{ background:C.bg, minHeight:"100vh", maxWidth:430, margin:"0 auto", display:"flex", flexDirection:"column", fontFamily:"'DM Sans', -apple-system, sans-serif", color:C.ink, position:"relative" },
-  brandHero:{ fontSize:44, fontWeight:700, color:C.ink, letterSpacing:-1, fontFamily:"'Cormorant Garamond', Georgia, serif" },
-  brand:{ fontSize:24, fontWeight:700, color:C.ink, letterSpacing:-0.5, fontFamily:"'Cormorant Garamond', Georgia, serif" },
+  brandHero:{ fontSize:44, fontWeight:800, color:C.ink, letterSpacing:-1 },
+  brand:{ fontSize:24, fontWeight:800, color:C.ink, letterSpacing:-0.5 },
   hdr:{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"14px 20px 12px", background:"rgba(250,250,248,0.95)", backdropFilter:"blur(12px)", borderBottom:`1px solid ${C.border}`, position:"sticky", top:0, zIndex:10 },
   main:{ flex:1, overflowY:"auto", paddingBottom:72 },
   inp:{ width:"100%", background:C.bg, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 16px", fontSize:14, color:C.ink, outline:"none", boxSizing:"border-box", fontFamily:"inherit", appearance:"none" },
@@ -1089,7 +1089,7 @@ const s = {
 };
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600;1,700&family=DM+Sans:wght@300;400;500;600;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,700;1,800&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   ::-webkit-scrollbar { width: 0; height: 0; }
   button { font-family: inherit; }
