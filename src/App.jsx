@@ -204,6 +204,7 @@ export default function App() {
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       await cred.user.sendEmailVerification();
+      // After email verify they sign in → onAuthStateChanged → setup
       setScreen("verifyEmail");
     } catch(e) {
       const msgs = { "auth/email-already-in-use":"Email already registered", "auth/weak-password":"Password must be 6+ characters", "auth/invalid-email":"Invalid email format" };
@@ -240,14 +241,15 @@ export default function App() {
   };
 
   const handleSetup = async () => {
-    if (!form.name || !form.age || !form.gender) { setAuthError("Please fill all fields"); return; }
-    if (parseInt(form.age) < 18) { setAuthError("You must be 18 or older"); return; }
     setUploading(true);
-    let photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(form.name)}&background=C4622D&color=fff&size=400&bold=true`;
-    if (photoFile) {
+    let photoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(form.name||"User")}&background=C4622D&color=fff&size=400&bold=true`;
+    // Upload first photo if exists
+    const firstPhoto = (form.photos||[]).find(Boolean);
+    if (firstPhoto && firstPhoto.startsWith("data:")) {
       try {
+        const blob = await fetch(firstPhoto).then(r=>r.blob());
         const fd = new FormData();
-        fd.append("file", photoFile);
+        fd.append("file", blob);
         fd.append("upload_preset", "nosingle_uploads");
         fd.append("folder", "nosingle/profiles");
         const res = await fetch(`https://api.cloudinary.com/v1_1/dvw2c6lp0/image/upload`, { method:"POST", body:fd });
@@ -255,9 +257,28 @@ export default function App() {
         if (data.secure_url) photoUrl = data.secure_url;
       } catch(e) {}
     }
-    const profile = { uid:user.uid, name:form.name, age:parseInt(form.age), city:form.city, gender:form.gender, email:user.email, photo:photoUrl, coins:150, gifts:0, verified:false, createdAt:new Date().toISOString() };
-    try { await setDoc(doc(db, "users", user.uid), profile); setUserProfile(profile); setScreen("app"); }
-    catch(e) { setAuthError("Failed to save: " + e.message); }
+    const profile = {
+      uid: user.uid,
+      name: form.name,
+      age: parseInt(form.age),
+      city: form.city || "Jakarta",
+      gender: form.gender || "other",
+      lookingFor: form.lookingFor || [],
+      appLang: form.appLang || "en",
+      email: user.email,
+      photo: photoUrl,
+      coins: 150,
+      gifts: 0,
+      verified: false,
+      createdAt: new Date().toISOString()
+    };
+    try {
+      await setDoc(doc(db, "users", user.uid), profile);
+      setUserProfile(profile);
+      setScreen("app");
+    } catch(e) {
+      showNotif("Failed to save profile: " + e.message);
+    }
     setUploading(false);
   };
 
@@ -435,93 +456,214 @@ export default function App() {
           2. Click the verification link<br/>
           3. Come back and sign in
         </div>
-        <button style={s.btnPrimary} onClick={()=>setScreen("auth")}>I've verified — Sign In</button>
+        <button style={s.btnPrimary} onClick={()=>setScreen("auth")}>I've verified — Sign In →</button>
         <button style={{...s.btnGhost, fontSize:13}} onClick={handleResendVerification}>Resend verification email</button>
       </div>
     </div>
   );
 
-  // ── SETUP ──
-  if (screen==="setup") return (
-    <div style={{...s.root,padding:"48px 28px 32px"}}>
-      <style>{css}</style>
-      <div style={{display:"flex",gap:4,marginBottom:36}}>
-        {[1,2].map(i=><div key={i} style={{flex:1,height:2,borderRadius:1,background:i<=setupStep?C.ink:C.border,transition:"background 0.3s"}}/>)}
+  // ── SETUP / ONBOARDING ──
+  if (screen==="setup") {
+    const LANGUAGES = [
+      { code:"en", name:"English", native:"English", flag:"🇺🇸" },
+      { code:"id", name:"Indonesian", native:"Bahasa Indonesia", flag:"🇮🇩" },
+      { code:"es", name:"Spanish", native:"Español", flag:"🇪🇸" },
+      { code:"pt", name:"Portuguese", native:"Português", flag:"🇧🇷" },
+      { code:"fr", name:"French", native:"Français", flag:"🇫🇷" },
+      { code:"ar", name:"Arabic", native:"العربية", flag:"🇸🇦", rtl:true },
+      { code:"zh", name:"Chinese", native:"中文", flag:"🇨🇳" },
+      { code:"ja", name:"Japanese", native:"日本語", flag:"🇯🇵" },
+      { code:"ko", name:"Korean", native:"한국어", flag:"🇰🇷" },
+      { code:"de", name:"German", native:"Deutsch", flag:"🇩🇪" },
+      { code:"hi", name:"Hindi", native:"हिन्दी", flag:"🇮🇳" },
+      { code:"ms", name:"Malay", native:"Bahasa Melayu", flag:"🇲🇾" },
+    ];
+
+    const LOOKING_FOR = [
+      { id:"women", icon:"👩", label:"Women" },
+      { id:"men", icon:"👨", label:"Men" },
+      { id:"everyone", icon:"🌍", label:"Everyone" },
+      { id:"nonbinary", icon:"🏳️‍🌈", label:"Non-binary people" },
+      { id:"women_nb", icon:"👩‍🦱", label:"Women & Non-binary" },
+      { id:"men_nb", icon:"👨‍🦱", label:"Men & Non-binary" },
+    ];
+
+    const totalSteps = 5;
+    const progress = (setupStep / totalSteps) * 100;
+
+    // Step 1: Welcome
+    if (setupStep === 1) return (
+      <div style={{...s.root, alignItems:"center", justifyContent:"center", background:C.bg}}>
+        <style>{css}</style>
+        <div style={{textAlign:"center", padding:"0 32px"}} className="fade-up">
+          <div style={{fontSize:64, marginBottom:20}}>👋</div>
+          <div style={{fontSize:32, fontWeight:800, color:C.ink, marginBottom:8}}>
+            Welcome, {form.name}!
+          </div>
+          <div style={{fontSize:16, color:C.ink2, lineHeight:1.7, marginBottom:40}}>
+            You're about to join a community where<br/>real connections happen.
+          </div>
+          <div style={{fontSize:13, color:C.ink3, marginBottom:32}}>Let's set up your profile. It takes about 2 minutes.</div>
+          <button style={s.btnPrimary} onClick={()=>setSetupStep(2)}>Let's go →</button>
+        </div>
       </div>
-      {setupStep===1 && (
-        <div className="fade-up">
-          <div style={s.setupH}>Add your photo</div>
-          <div style={s.setupSub}>Profiles with photos get 3x more connections.</div>
-          <div style={{display:"flex",justifyContent:"center",margin:"40px 0"}}>
-            <div style={{width:160,height:160,borderRadius:80,border:`2px dashed ${C.border}`,cursor:"pointer",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",background:C.surface}} onClick={()=>fileInputRef.current?.click()}>
-              {photoPreview?<img src={photoPreview} style={{width:"100%",height:"100%",objectFit:"cover"}} alt=""/>:<div style={{textAlign:"center"}}><div style={{fontSize:36,color:C.border}}>+</div><div style={{fontSize:12,color:C.ink3,marginTop:6}}>Add photo</div></div>}
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f){setPhotoFile(f);const r=new FileReader();r.onload=ev=>setPhotoPreview(ev.target.result);r.readAsDataURL(f);}}}/>
-          </div>
-          <button style={s.btnPrimary} onClick={()=>setSetupStep(2)}>Continue</button>
-          <button style={s.btnGhost} onClick={()=>setSetupStep(2)}>Skip for now</button>
+    );
+
+    // Step 2: Language
+    if (setupStep === 2) return (
+      <div style={{...s.root, padding:"48px 28px 32px", background:C.bg}}>
+        <style>{css}</style>
+        <div style={{height:3, background:C.border, borderRadius:2, marginBottom:32, overflow:"hidden"}}>
+          <div style={{width:`${(2/totalSteps)*100}%`, height:"100%", background:C.ink, borderRadius:2, transition:"width 0.4s"}}/>
         </div>
-      )}
-      {setupStep===2 && (
-        <div className="fade-up">
-          <div style={s.setupH}>About you</div>
-          <div style={s.setupSub}>This is what others will see first.</div>
-          <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:28}}>
-            <input placeholder="Nickname *" style={s.inp} value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/>
-            <input type="number" placeholder="Age *" style={s.inp} value={form.age} min="18" onChange={e=>setForm(p=>({...p,age:e.target.value}))}/>
-            <select style={s.inp} value={form.gender} onChange={e=>setForm(p=>({...p,gender:e.target.value}))}>
-              <option value="">I am a... *</option>
-              <option value="woman">Woman</option>
-              <option value="man">Man</option>
-              <option value="nonbinary">Non-binary</option>
-              <option value="other">Other</option>
-            </select>
-            <select style={{...s.inp}} value={form.city} onChange={e=>setForm(p=>({...p,city:e.target.value}))}>
-              <optgroup label="🇮🇩 Indonesia">
-                {["Jakarta","Bandung","Surabaya","Bali/Denpasar","Yogyakarta","Medan","Semarang","Makassar","Palembang","Tangerang","Bekasi","Bogor","Malang","Batam","Pekanbaru"].map(c=><option key={c} value={c}>{c}</option>)}
-              </optgroup>
-              <optgroup label="🌏 Asia Pacific">
-                {["Singapore","Kuala Lumpur","Penang","Johor Bahru","Manila","Cebu","Bangkok","Chiang Mai","Ho Chi Minh City","Hanoi","Phnom Penh","Yangon","Sydney","Melbourne","Brisbane","Perth","Auckland","Wellington","Tokyo","Osaka","Kyoto","Seoul","Busan","Beijing","Shanghai","Guangzhou","Shenzhen","Hong Kong","Taipei","Mumbai","Delhi","Bangalore","Chennai"].map(c=><option key={c} value={c}>{c}</option>)}
-              </optgroup>
-              <optgroup label="🌍 Middle East">
-                {["Dubai","Abu Dhabi","Sharjah","Riyadh","Jeddah","Doha","Kuwait City","Manama","Muscat","Beirut","Istanbul"].map(c=><option key={c} value={c}>{c}</option>)}
-              </optgroup>
-              <optgroup label="🌍 Europe">
-                {["London","Manchester","Paris","Berlin","Amsterdam","Madrid","Barcelona","Rome","Milan","Zurich","Vienna","Stockholm","Copenhagen","Oslo","Helsinki","Brussels","Lisbon","Athens","Warsaw","Prague","Budapest"].map(c=><option key={c} value={c}>{c}</option>)}
-              </optgroup>
-              <optgroup label="🌎 Americas">
-                {["New York","Los Angeles","Chicago","Houston","Miami","San Francisco","Seattle","Boston","Toronto","Vancouver","Montreal","São Paulo","Rio de Janeiro","Mexico City","Buenos Aires","Bogotá"].map(c=><option key={c} value={c}>{c}</option>)}
-              </optgroup>
-              <optgroup label="🌍 Africa">
-                {["Nairobi","Lagos","Cape Town","Cairo","Casablanca","Accra","Addis Ababa","Dar es Salaam"].map(c=><option key={c} value={c}>{c}</option>)}
-              </optgroup>
-            </select>
-            <input placeholder="Or type your city..." style={{...s.inp,marginBottom:0}} onChange={e=>{if(e.target.value) setForm(p=>({...p,city:e.target.value}))}}/>
-          </div>
-          {/* Women-first explanation */}
-          {form.gender==="woman" && (
-            <div style={{background:"#FDF0E8",borderRadius:14,padding:"14px 16px",marginTop:16,border:`1px solid ${C.accent}20`}}>
-              <div style={{fontSize:13,fontWeight:600,color:C.accent,marginBottom:4}}>👑 You're in control</div>
-              <div style={{fontSize:12,color:C.ink2,lineHeight:1.6}}>On NoSingle, women approve connections first. Men can like you, but chat only opens when you say yes.</div>
-            </div>
-          )}
-          {form.gender==="man" && (
-            <div style={{background:"#EEF2F7",borderRadius:14,padding:"14px 16px",marginTop:16}}>
-              <div style={{fontSize:13,fontWeight:600,color:C.men,marginBottom:4}}>💌 How it works for you</div>
-              <div style={{fontSize:12,color:C.ink2,lineHeight:1.6}}>You can like anyone. If she's interested, she'll approve — and chat opens for both of you.</div>
-            </div>
-          )}
-          {authError && <div style={{fontSize:13,color:C.red,marginTop:12,textAlign:"center"}}>{authError}</div>}
-          <div style={{display:"flex",gap:10,marginTop:24}}>
-            <button style={{...s.btnGhost,flex:1,marginBottom:0}} onClick={()=>setSetupStep(1)}>Back</button>
-            <button style={{...s.btnPrimary,flex:2,marginBottom:0}} onClick={handleSetup} disabled={uploading}>
-              {uploading?"Saving...":"Start Exploring"}
+        <div style={s.setupH} className="fade-up">Choose your language</div>
+        <div style={{...s.setupSub, marginBottom:24}}>The app will switch to your language instantly.</div>
+        <div style={{display:"flex", flexDirection:"column", gap:8, flex:1, overflowY:"auto"}}>
+          {LANGUAGES.map(lang=>(
+            <button key={lang.code} style={{display:"flex", alignItems:"center", gap:14, padding:"14px 16px", background:form.appLang===lang.code?C.ink:C.surface, border:`1.5px solid ${form.appLang===lang.code?C.ink:C.border}`, borderRadius:16, cursor:"pointer", textAlign:"left", fontFamily:"inherit", transition:"all 0.2s"}}
+              onClick={()=>setForm(p=>({...p, appLang:lang.code}))}>
+              <span style={{fontSize:28}}>{lang.flag}</span>
+              <div style={{flex:1}}>
+                <div style={{fontSize:15, fontWeight:600, color:form.appLang===lang.code?"white":C.ink}}>{lang.native}</div>
+                <div style={{fontSize:12, color:form.appLang===lang.code?"rgba(255,255,255,0.6)":C.ink3, marginTop:1}}>{lang.name}</div>
+              </div>
+              {form.appLang===lang.code && <span style={{color:"white", fontSize:18}}>✓</span>}
             </button>
-          </div>
+          ))}
         </div>
-      )}
-    </div>
-  );
+        <button style={{...s.btnPrimary, marginTop:20}} onClick={()=>{if(!form.appLang)setForm(p=>({...p,appLang:"en"}));setSetupStep(3);}}>Continue →</button>
+      </div>
+    );
+
+    // Step 3: Age
+    if (setupStep === 3) return (
+      <div style={{...s.root, padding:"48px 28px 32px", background:C.bg}}>
+        <style>{css}</style>
+        <div style={{height:3, background:C.border, borderRadius:2, marginBottom:32, overflow:"hidden"}}>
+          <div style={{width:`${(3/totalSteps)*100}%`, height:"100%", background:C.ink, borderRadius:2, transition:"width 0.4s"}}/>
+        </div>
+        <div style={s.setupH} className="fade-up">How old are you?</div>
+        <div style={{...s.setupSub, marginBottom:40}}>Your age will be shown on your profile.</div>
+        <div style={{display:"flex", flexDirection:"column", alignItems:"center", gap:16}}>
+          <input type="number" placeholder="Enter your age" min="18" max="100"
+            style={{...s.inp, fontSize:32, fontWeight:700, textAlign:"center", padding:"20px", borderRadius:20, letterSpacing:2}}
+            value={form.age} onChange={e=>setForm(p=>({...p,age:e.target.value}))}/>
+          {form.age && parseInt(form.age) < 18 && (
+            <div style={{fontSize:13, color:C.red}}>You must be 18 or older to use NoSingle</div>
+          )}
+          {form.age && parseInt(form.age) >= 18 && (
+            <div style={{fontSize:14, color:C.success}}>✓ {form.age} years old</div>
+          )}
+        </div>
+        <div style={{flex:1}}/>
+        <button style={{...s.btnPrimary, marginTop:40, opacity:form.age && parseInt(form.age)>=18?1:0.4}}
+          disabled={!form.age || parseInt(form.age)<18}
+          onClick={()=>setSetupStep(4)}>Continue →</button>
+        <button style={s.btnGhost} onClick={()=>setSetupStep(2)}>← Back</button>
+      </div>
+    );
+
+    // Step 4: Looking for
+    if (setupStep === 4) return (
+      <div style={{...s.root, padding:"48px 28px 32px", background:C.bg}}>
+        <style>{css}</style>
+        <div style={{height:3, background:C.border, borderRadius:2, marginBottom:32, overflow:"hidden"}}>
+          <div style={{width:`${(4/totalSteps)*100}%`, height:"100%", background:C.ink, borderRadius:2, transition:"width 0.4s"}}/>
+        </div>
+        <div style={s.setupH} className="fade-up">I'm interested in...</div>
+        <div style={{...s.setupSub, marginBottom:28}}>Choose all that apply. You can change this anytime.</div>
+        <div style={{display:"flex", flexDirection:"column", gap:10, flex:1, overflowY:"auto"}}>
+          {LOOKING_FOR.map(opt=>{
+            const selected = (form.lookingFor||[]).includes(opt.id);
+            return (
+              <button key={opt.id} style={{display:"flex", alignItems:"center", gap:14, padding:"16px 18px", background:selected?C.ink:C.surface, border:`1.5px solid ${selected?C.ink:C.border}`, borderRadius:16, cursor:"pointer", textAlign:"left", fontFamily:"inherit", transition:"all 0.2s"}}
+                onClick={()=>{
+                  const current = form.lookingFor||[];
+                  const updated = current.includes(opt.id) ? current.filter(x=>x!==opt.id) : [...current, opt.id];
+                  setForm(p=>({...p, lookingFor:updated}));
+                }}>
+                <span style={{fontSize:28}}>{opt.icon}</span>
+                <span style={{fontSize:16, fontWeight:600, color:selected?"white":C.ink, flex:1}}>{opt.label}</span>
+                <div style={{width:24, height:24, borderRadius:12, border:`2px solid ${selected?"white":C.border}`, background:selected?"white":"transparent", display:"flex", alignItems:"center", justifyContent:"center"}}>
+                  {selected && <div style={{width:12, height:12, borderRadius:6, background:C.ink}}/>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <button style={{...s.btnPrimary, marginTop:20, opacity:(form.lookingFor||[]).length>0?1:0.4}}
+          disabled={!(form.lookingFor||[]).length}
+          onClick={()=>setSetupStep(5)}>Continue →</button>
+        <button style={s.btnGhost} onClick={()=>setSetupStep(3)}>← Back</button>
+      </div>
+    );
+
+    // Step 5: Photos
+    if (setupStep === 5) return (
+      <div style={{...s.root, padding:"48px 28px 32px", background:C.bg}}>
+        <style>{css}</style>
+        <div style={{height:3, background:C.border, borderRadius:2, marginBottom:32, overflow:"hidden"}}>
+          <div style={{width:"100%", height:"100%", background:C.ink, borderRadius:2}}/>
+        </div>
+        <div style={s.setupH} className="fade-up">Add your photos</div>
+        <div style={{...s.setupSub, marginBottom:8}}>Add up to 6 photos. Your first photo is your main profile photo.</div>
+        <div style={{fontSize:12, color:C.accent, marginBottom:24, fontWeight:500}}>⭐ Profiles with 3+ photos get 4x more connections</div>
+
+        {/* 6 photo slots grid */}
+        <div style={{display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8, marginBottom:24}}>
+          {[0,1,2,3,4,5].map(idx=>{
+            const photo = (form.photos||[])[idx];
+            const isFirst = idx === 0;
+            return (
+              <div key={idx} style={{position:"relative", aspectRatio:"3/4", borderRadius:16, overflow:"hidden", background:C.bg, border:`2px ${photo?"solid transparent":"dashed"} ${photo?"transparent":C.border}`, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center"}}
+                onClick={()=>{
+                  const inp = document.createElement("input");
+                  inp.type = "file"; inp.accept = "image/*";
+                  inp.onchange = e => {
+                    const f = e.target.files[0];
+                    if (!f) return;
+                    const r = new FileReader();
+                    r.onload = ev => {
+                      const photos = [...(form.photos||[])];
+                      photos[idx] = ev.target.result;
+                      setForm(p=>({...p, photos}));
+                    };
+                    r.readAsDataURL(f);
+                  };
+                  inp.click();
+                }}>
+                {photo ? (
+                  <>
+                    <img src={photo} style={{width:"100%", height:"100%", objectFit:"cover", position:"absolute", inset:0}} alt=""/>
+                    {isFirst && <div style={{position:"absolute", bottom:6, left:6, background:"rgba(22,12,0,0.6)", borderRadius:8, padding:"2px 8px", fontSize:10, color:"white", fontWeight:600}}>Main</div>}
+                    <button style={{position:"absolute", top:6, right:6, background:"rgba(22,12,0,0.6)", border:"none", borderRadius:"50%", width:24, height:24, color:"white", fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center"}}
+                      onClick={e=>{e.stopPropagation(); const photos=[...(form.photos||[])]; photos[idx]=null; setForm(p=>({...p,photos}));}}>✕</button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{fontSize:24, color:C.border, marginBottom:4}}>{isFirst?"📷":"+"}</div>
+                    <div style={{fontSize:10, color:C.ink3, textAlign:"center"}}>{isFirst?"Add main
+photo":"Add photo"}</div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{fontSize:12, color:C.ink3, marginBottom:20, lineHeight:1.6}}>
+          💡 Tips: Clear face photos, good lighting, genuine smile. No sunglasses in your first photo.
+        </div>
+
+        <button style={{...s.btnPrimary, opacity:(form.photos||[]).filter(Boolean).length>0?1:0.5}}
+          disabled={!(form.photos||[]).filter(Boolean).length}
+          onClick={handleSetup}>
+          {uploading ? "Setting up your profile..." : "Finish & Start Exploring →"}
+        </button>
+        <button style={s.btnGhost} onClick={()=>setSetupStep(4)}>← Back</button>
+      </div>
+    );
+  }
 
   // ── LIKE MODAL ──
   if (likingTarget) return (
